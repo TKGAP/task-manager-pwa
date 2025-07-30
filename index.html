@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>付箋付きタスク管理アプリ</title>
+<style>
+body {font-family:sans-serif;margin:0;background:#f0f4f8;}
+header {background:#0052cc;color:#fff;padding:1rem;text-align:center;font-size:1.3rem;}
+main {max-width:900px;margin:auto;padding:1rem;}
+.tabs{display:flex;justify-content:center;margin-bottom:1rem;}
+.tab-btn{padding:.5rem 1.5rem;margin:0 .3rem;border:none;background:#ccc;border-radius:4px;cursor:pointer;font-weight:bold;}
+.tab-btn.active{background:#0052cc;color:#fff;}
+#taskList{display:flex;flex-wrap:wrap;gap:.8rem;}
+.task-card{position:relative;background:#fff;padding:1rem 1rem 1rem 2.5rem;border-radius:12px;width:180px;min-height:100px;box-shadow:0 3px 7px rgba(0,0,0,.15);}
+.task-card.done{opacity:.5;text-decoration:line-through;}
+.task-card input[type=checkbox]{position:absolute;left:10px;top:10px;}
+.color-0{background:#fffbea;} .color-1{background:#ffebeb;} .color-2{background:#e0ffe0;} .color-3{background:#e0e7ff;}
+.shape-0{border-radius:12px;} .shape-1{border-radius:4px;box-shadow:none;} .shape-2{border-radius:20px;box-shadow:0 0 15px rgba(0,0,0,.1) inset;}
+.task-title{font-weight:bold;margin-bottom:.4rem;}
+.menu-btn{position:absolute;top:8px;right:8px;background:transparent;border:none;font-size:1.5rem;cursor:pointer;}
+.menu{position:absolute;top:30px;right:8px;background:#fff;border:1px solid #ccc;box-shadow:0 2px 7px rgba(0,0,0,.15);border-radius:6px;padding:6px 8px;display:none;z-index:10;}
+.menu.visible{display:block;}
+.menu button{width:100%;border:none;background:none;padding:6px 4px;text-align:left;cursor:pointer;font-size:.9rem;}
+.menu button:hover{background:#f0f0f0;}
+.menu .delete-btn{color:#e53935;font-weight:bold;}
+#calendarView{display:none;}
+#calendar{max-width:900px;margin:auto;}
+table.calendar-table{border-collapse:collapse;width:100%;}
+.calendar-table th,.calendar-table td{border:1px solid #ccc;width:14.28%;height:90px;vertical-align:top;padding:3px;}
+.calendar-table th{background:#0052cc;color:#fff;}
+.calendar-date{font-weight:bold;font-size:.9rem;}
+.calendar-task{background:#e0e7ff;border-radius:6px;margin:2px 0;padding:2px 5px;font-size:.75rem;}
+</style>
+</head>
+<body>
+<header>付箋付きタスク管理アプリ</header>
+<main>
+<div class="tabs">
+  <button class="tab-btn active" data-view="list">リスト表示</button>
+  <button class="tab-btn" data-view="calendar">カレンダー表示</button>
+</div>
+<section id="listView">
+  <button id="addTaskBtn">＋ タスク追加</button>
+  <div id="taskList"></div>
+</section>
+<section id="calendarView">
+  <div id="calendar"></div>
+</section>
+</main>
+
+<div id="taskModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);justify-content:center;align-items:center;z-index:100;">
+  <div style="background:#fff;padding:1rem;border-radius:8px;max-width:350px;width:90%;">
+    <h3>タスク追加</h3>
+    <form id="taskForm">
+      <label>タイトル<br><input type="text" id="taskTitle" required></label><br>
+      <label>期限<br><input type="date" id="taskDue"></label><br>
+      <button type="submit">保存</button>
+      <button type="button" id="cancelBtn" style="margin-left:1rem;">キャンセル</button>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  let tasks = JSON.parse(localStorage.getItem("tasks")||"[]");
+  const taskList=document.getElementById("taskList");
+  const taskModal=document.getElementById("taskModal");
+  const taskForm=document.getElementById("taskForm");
+  const taskTitle=document.getElementById("taskTitle");
+  const taskDue=document.getElementById("taskDue");
+  const tabs=document.querySelectorAll(".tab-btn");
+  const listView=document.getElementById("listView");
+  const calendarView=document.getElementById("calendarView");
+  const calendarDiv=document.getElementById("calendar");
+  const colors=["color-0","color-1","color-2","color-3"];
+  const shapes=["shape-0","shape-1","shape-2"];
+  const fonts=["1rem","1.2rem","1.5rem"];
+
+  function save(){localStorage.setItem("tasks",JSON.stringify(tasks));}
+  function openModal(){taskModal.style.display="flex";}
+  function closeModal(){taskModal.style.display="none";taskForm.reset();}
+  document.getElementById("addTaskBtn").onclick=()=>{openModal();}
+  document.getElementById("cancelBtn").onclick=()=>closeModal();
+  taskForm.onsubmit=e=>{
+    e.preventDefault();
+    tasks.push({title:taskTitle.value,due:taskDue.value,done:false,color:0,shape:0,fontSize:0});
+    save();closeModal();render();
+  };
+
+  function render(){
+    taskList.innerHTML="";
+    tasks.forEach((t,i)=>{
+      const card=document.createElement("div");
+      card.className=`task-card ${colors[t.color]} ${shapes[t.shape]}`;
+      if(t.done) card.classList.add("done");
+      card.style.fontSize=fonts[t.fontSize];
+      const cb=document.createElement("input");
+      cb.type="checkbox";cb.checked=t.done;
+      cb.onchange=()=>{t.done=cb.checked;save();render();}
+      card.appendChild(cb);
+
+      const title=document.createElement("div");
+      title.className="task-title";title.textContent=t.title;
+      card.appendChild(title);
+
+      // ⋮ メニュー
+      const btn=document.createElement("button");
+      btn.className="menu-btn";btn.textContent="⋮";
+      card.appendChild(btn);
+
+      const menu=document.createElement("div");
+      menu.className="menu";
+      menu.innerHTML=`
+        <button class="font-s">文字サイズ 小</button>
+        <button class="font-m">文字サイズ 中</button>
+        <button class="font-l">文字サイズ 大</button>
+        <button class="shape0">形状 角丸</button>
+        <button class="shape1">形状 角あり</button>
+        <button class="shape2">形状 影あり</button>
+        <button class="delete-btn">🗑 削除</button>
+      `;
+      card.appendChild(menu);
+
+      btn.onclick=e=>{
+        e.stopPropagation();
+        document.querySelectorAll(".menu").forEach(m=>{if(m!==menu)m.classList.remove("visible")});
+        menu.classList.toggle("visible");
+      };
+      menu.querySelector(".font-s").onclick=()=>{t.fontSize=0;save();render();}
+      menu.querySelector(".font-m").onclick=()=>{t.fontSize=1;save();render();}
+      menu.querySelector(".font-l").onclick=()=>{t.fontSize=2;save();render();}
+      menu.querySelector(".shape0").onclick=()=>{t.shape=0;save();render();}
+      menu.querySelector(".shape1").onclick=()=>{t.shape=1;save();render();}
+      menu.querySelector(".shape2").onclick=()=>{t.shape=2;save();render();}
+      menu.querySelector(".delete-btn").onclick=()=>{tasks.splice(i,1);save();render();}
+
+      let sx=null;
+      card.addEventListener("touchstart",e=>sx=e.touches[0].clientX);
+      card.addEventListener("touchend",e=>{
+        if(sx==null)return;
+        let diff=e.changedTouches[0].clientX-sx;
+        if(Math.abs(diff)>30){
+          t.color=(t.color+(diff>0?1:colors.length-1))%colors.length;
+          save();render();
+        }
+        sx=null;
+      });
+
+      taskList.appendChild(card);
+    });
+    document.body.onclick=()=>document.querySelectorAll(".menu").forEach(m=>m.classList.remove("visible"));
+  }
+
+  function renderCalendar(){
+    calendarDiv.innerHTML="";
+    const d=new Date(),y=d.getFullYear(),m=d.getMonth();
+    const fd=new Date(y,m,1),ld=new Date(y,m+1,0);
+    const sw=fd.getDay(),td=ld.getDate();
+    const tbl=document.createElement("table");tbl.className="calendar-table";
+    const head=document.createElement("tr");
+    ["日","月","火","水","木","金","土"].forEach(day=>{const th=document.createElement("th");th.textContent=day;head.appendChild(th)});
+    const thead=document.createElement("thead");thead.appendChild(head);tbl.appendChild(thead);
+    const tbody=document.createElement("tbody");let dc=1;
+    for(let i=0;i<6;i++){
+      const tr=document.createElement("tr");
+      for(let j=0;j<7;j++){
+        const td=document.createElement("td");
+        if(i===0&&j<sw||dc>td){}else{
+          if(dc<=td){
+            const div=document.createElement("div");div.className="calendar-date";div.textContent=dc;td.appendChild(div);
+            const ds=`${y}-${String(m+1).padStart(2,"0")}-${String(dc).padStart(2,"0")}`;
+            tasks.forEach(t=>{if(t.due===ds){const ct=document.createElement("div");ct.className="calendar-task";ct.textContent=t.title;td.appendChild(ct);}});
+            dc++;
+          }
+        }
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    tbl.appendChild(tbody);calendarDiv.appendChild(tbl);
+  }
+
+  tabs.forEach(tab=>{
+    tab.onclick=()=>{
+      tabs.forEach(x=>x.classList.remove("active"));tab.classList.add("active");
+      if(tab.dataset.view==="list"){listView.style.display="";calendarView.style.display="none";render();}
+      else{listView.style.display="none";calendarView.style.display="";renderCalendar();}
+    };
+  });
+  render();
+})();
+</script>
+</body>
+</html>
