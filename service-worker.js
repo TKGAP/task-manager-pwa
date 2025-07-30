@@ -1,6 +1,6 @@
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open('v3').then(cache => cache.addAll([
+    caches.open('v4').then(cache => cache.addAll([
       './index.html',
       './manifest.json',
       './icon.png'
