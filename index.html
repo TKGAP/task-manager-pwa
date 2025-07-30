@@ -149,7 +149,6 @@ ul.task-list li.due-soon {
 </section>
 </main>
 <script>
-// --- ここからJavaScript ---
 let tasks = [];
 let assignees = [];
 const assigneeForm = document.getElementById("assigneeForm");
@@ -159,6 +158,7 @@ const taskForm = document.getElementById("taskForm");
 const assigneeSelect = document.getElementById("assigneeSelect");
 const taskList = document.getElementById("taskList");
 const fileInput = document.getElementById("fileInput");
+
 function loadData() {
   const savedTasks = localStorage.getItem("tasks");
   const savedAssignees = localStorage.getItem("assignees");
@@ -194,5 +194,80 @@ function isDueSoon(dateStr) {
 }
 function renderTasks() {
   taskList.innerHTML = "";
-  tasks.forEach((task, idx) => {
-    const li = document.createElement("
+  tasks.forEach((task) => {
+    const li = document.createElement("li");
+    if(isDueSoon(task.dueDate)) li.classList.add("due-soon");
+    li.innerHTML = `
+      <div class="task-title">${task.title}</div>
+      <div class="task-meta">
+        プロジェクト: ${task.project} | 期限: ${task.dueDate || "未設定"} | 優先度: ${task.priority} | 担当者: ${task.assignee || "未設定"}
+      </div>
+      <div>${task.description || ""}</div>
+      <div class="file-list">${createFileList(task.files)}</div>`;
+    taskList.appendChild(li);
+  });
+  notifyDueSoonTasks();
+}
+
+// --- 修正済みの担当者追加処理 ---
+assigneeForm.addEventListener("submit", e => {
+  e.preventDefault();
+  const val = assigneeNameInput.value.trim();
+  if(val && !assignees.includes(val)){
+    assignees.push(val);
+    localStorage.setItem("assignees", JSON.stringify(assignees));
+    renderAssignees();
+    assigneeNameInput.value = "";
+    alert("担当者を追加しました！");
+  } else {
+    alert("同じ名前は追加できません！");
+  }
+});
+
+taskForm.addEventListener("submit", e => {
+  e.preventDefault();
+  const files = fileInput.files;
+  const fileNames = files ? Array.from(files).map(f => ({name:f.name})) : [];
+  const newTask = {
+    project: taskForm.project.value.trim(),
+    title: taskForm.title.value.trim(),
+    description: taskForm.description.value.trim(),
+    dueDate: taskForm.dueDate.value,
+    priority: taskForm.priority.value,
+    assignee: taskForm.assigneeSelect.value,
+    comments: [],
+    files: fileNames
+  };
+  tasks.push(newTask);
+  saveData();
+  renderTasks();
+  taskForm.reset();
+});
+
+function requestNotificationPermission() {
+  if ("Notification" in window) Notification.requestPermission();
+}
+function notifyDueSoonTasks() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  tasks.forEach(task => {
+    if (isDueSoon(task.dueDate)) {
+      new Notification(`期限間近: ${task.title}`, {
+        body: `${task.project} のタスクが${task.dueDate}に締め切り！`,
+        icon: "icon.png"
+      });
+    }
+  });
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./service-worker.js');
+}
+
+loadData();
+renderAssignees();
+renderTasks();
+requestNotificationPermission();
+</script>
+</body>
+</html>
