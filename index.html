@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>タスク管理アプリ</title>
+<link rel="manifest" href="manifest.json" />
+<style>
+body {
+  font-family: sans-serif;
+  margin: 0; padding: 0;
+  background: #f0f4f8;
+  display: flex; flex-direction: column; min-height: 100vh;
+}
+header {
+  background: #0052cc;
+  color: white;
+  padding: 1rem;
+  text-align: center;
+}
+main {
+  flex: 1;
+  padding: 1rem;
+  max-width: 900px;
+  margin: auto;
+  width: 100%;
+}
+section {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  margin-bottom: 1rem;
+}
+label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: bold;
+}
+input, select, textarea, button {
+  font-size: 1rem;
+}
+input, select, textarea {
+  width: 100%;
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+button {
+  background: #0052cc;
+  color: white;
+  border: none;
+  padding: 0.7rem 1.5rem;
+  border-radius: 5px;
+  cursor: pointer;
+}
+button:hover {
+  background: #003d99;
+}
+ul.task-list {
+  list-style: none;
+  padding: 0;
+}
+ul.task-list li {
+  background: #f9faff;
+  padding: 1rem;
+  margin-bottom: 0.7rem;
+  border-radius: 6px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.05);
+}
+ul.task-list li.due-soon {
+  border-left: 5px solid #e53935;
+  background: #fff0f0;
+}
+.task-title {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+.task-meta {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+.comments {
+  margin-top: 0.8rem;
+  border-top: 1px solid #ccc;
+  padding-top: 0.5rem;
+}
+.comment {
+  background: #e6f0ff;
+  margin-bottom: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+}
+.file-item {
+  background: #d0e9ff;
+  border-radius: 4px;
+  padding: 3px 6px;
+  margin-bottom: 3px;
+  display: inline-block;
+  font-size: 0.9rem;
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>大規模タスク管理アプリ</h1>
+</header>
+<main>
+<section>
+  <h2>担当者管理</h2>
+  <form id="assigneeForm">
+    <label for="assigneeName">担当者名追加</label>
+    <input type="text" id="assigneeName" placeholder="担当者名を入力" required />
+    <button type="submit">追加</button>
+  </form>
+  <ul id="assigneeList"></ul>
+</section>
+<section>
+  <h2>タスク追加</h2>
+  <form id="taskForm">
+    <label for="project">プロジェクト</label>
+    <input type="text" id="project" placeholder="例：仕事、趣味" required />
+    <label for="title">タスクタイトル</label>
+    <input type="text" id="title" placeholder="タスク内容を入力" required />
+    <label for="description">説明</label>
+    <textarea id="description" placeholder="詳細説明"></textarea>
+    <label for="dueDate">期限</label>
+    <input type="date" id="dueDate" />
+    <label for="priority">優先度</label>
+    <select id="priority">
+      <option value="低">低</option>
+      <option value="中" selected>中</option>
+      <option value="高">高</option>
+    </select>
+    <label for="assigneeSelect">担当者</label>
+    <select id="assigneeSelect">
+      <option value="">未設定</option>
+    </select>
+    <label for="fileInput">ファイル添付</label>
+    <input type="file" id="fileInput" multiple />
+    <button type="submit">タスク追加</button>
+  </form>
+</section>
+<section>
+  <h2>タスク一覧</h2>
+  <ul class="task-list" id="taskList"></ul>
+</section>
+</main>
+<script>
+let tasks = [];
+let assignees = [];
+const assigneeForm = document.getElementById("assigneeForm");
+const assigneeNameInput = document.getElementById("assigneeName");
+const assigneeList = document.getElementById("assigneeList");
+const taskForm = document.getElementById("taskForm");
+const assigneeSelect = document.getElementById("assigneeSelect");
+const taskList = document.getElementById("taskList");
+const fileInput = document.getElementById("fileInput");
+
+function loadData() {
+  const savedTasks = localStorage.getItem("tasks");
+  const savedAssignees = localStorage.getItem("assignees");
+  if(savedTasks) tasks = JSON.parse(savedTasks);
+  if(savedAssignees) assignees = JSON.parse(savedAssignees);
+}
+function saveData() {
+  localStorage.setItem("tasks", JSON.stringify(tasks));
+  localStorage.setItem("assignees", JSON.stringify(assignees));
+}
+function renderAssignees() {
+  assigneeList.innerHTML = "";
+  assigneeSelect.innerHTML = '<option value="">未設定</option>';
+  assignees.forEach(a => {
+    const li = document.createElement("li");
+    li.textContent = a;
+    assigneeList.appendChild(li);
+    const option = document.createElement("option");
+    option.value = a; option.textContent = a;
+    assigneeSelect.appendChild(option);
+  });
+}
+function createFileList(files) {
+  if(!files || files.length === 0) return "";
+  return Array.from(files).map(f => `<span class="file-item">${f.name}</span>`).join(" ");
+}
+function isDueSoon(dateStr) {
+  if(!dateStr) return false;
+  const today = new Date();
+  const dueDate = new Date(dateStr);
+  const diff = (dueDate - today)/(1000*60*60*24);
+  return diff >= 0 && diff <= 3;
+}
+function renderTasks() {
+  taskList.innerHTML = "";
+  tasks.forEach((task) => {
+    const li = document.createElement("li");
+    if(isDueSoon(task.dueDate)) li.classList.add("due-soon");
+    li.innerHTML = `
+      <div class="task-title">${task.title}</div>
+      <div class="task-meta">
+        プロジェクト: ${task.project} | 期限: ${task.dueDate || "未設定"} | 優先度: ${task.priority} | 担当者: ${task.assignee || "未設定"}
+      </div>
+      <div>${task.description || ""}</div>
+      <div class="file-list">${createFileList(task.files)}</div>`;
+    taskList.appendChild(li);
+  });
+  notifyDueSoonTasks();
+}
+
+// --- 修正済みの担当者追加処理 ---
+assigneeForm.addEventListener("submit", e => {
+  e.preventDefault();
+  const val = assigneeNameInput.value.trim();
+  if(val && !assignees.includes(val)){
+    assignees.push(val);
+    localStorage.setItem("assignees", JSON.stringify(assignees));
+    renderAssignees();
+    assigneeNameInput.value = "";
+    alert("担当者を追加しました！");
+  } else {
+    alert("同じ名前は追加できません！");
+  }
+});
+
+taskForm.addEventListener("submit", e => {
+  e.preventDefault();
+  const files = fileInput.files;
+  const fileNames = files ? Array.from(files).map(f => ({name:f.name})) : [];
+  const newTask = {
+    project: taskForm.project.value.trim(),
+    title: taskForm.title.value.trim(),
+    description: taskForm.description.value.trim(),
+    dueDate: taskForm.dueDate.value,
+    priority: taskForm.priority.value,
+    assignee: taskForm.assigneeSelect.value,
+    comments: [],
+    files: fileNames
+  };
+  tasks.push(newTask);
+  saveData();
+  renderTasks();
+  taskForm.reset();
+});
+
+function requestNotificationPermission() {
+  if ("Notification" in window) Notification.requestPermission();
+}
+function notifyDueSoonTasks() {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  tasks.forEach(task => {
+    if (isDueSoon(task.dueDate)) {
+      new Notification(`期限間近: ${task.title}`, {
+        body: `${task.project} のタスクが${task.dueDate}に締め切り！`,
+        icon: "icon.png"
+      });
+    }
+  });
+}
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./service-worker.js');
+}
+
+loadData();
+renderAssignees();
+renderTasks();
+requestNotificationPermission();
+</script>
+</body>
+</html>
