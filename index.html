@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>付箋付きタスク管理アプリ</title>
+<link rel="manifest" href="manifest.json">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js');
+}
+</script>
+<style>
+  body { font-family: sans-serif; margin:0; padding:0; background:#f0f4f8; }
+  header { background:#0052cc; color:#fff; padding:1rem; text-align:center; font-size:1.3rem; }
+  main { max-width: 900px; margin: auto; padding: 1rem; }
+
+  .tabs { display:flex; justify-content:center; margin-bottom: 1rem; }
+  .tab-btn { padding: 0.5rem 1.5rem; margin:0 0.3rem; border:none; background:#ccc; border-radius:4px; cursor:pointer; font-weight:bold; }
+  .tab-btn.active { background:#0052cc; color:#fff; }
+
+  #taskList { display:flex; flex-wrap: wrap; gap: 0.8rem; }
+
+  .task-card {
+    position: relative;
+    background:#fff;
+    padding: 1rem 1rem 1rem 2.5rem;
+    border-radius: 12px;
+    width: 180px;
+    min-height: 100px;
+    box-shadow: 0 3px 7px rgba(0,0,0,0.15);
+    transition: background-color 0.3s, opacity 0.3s;
+    touch-action: pan-y;
+  }
+  .task-card.done { opacity: 0.5; text-decoration: line-through; }
+
+  .task-card input[type=checkbox] {
+    position: absolute; left: 10px; top: 10px; width: 18px; height: 18px;
+  }
+
+  .color-0 { background:#fffbea; }
+  .color-1 { background:#ffebeb; }
+  .color-2 { background:#e0ffe0; }
+  .color-3 { background:#e0e7ff; }
+
+  .shape-0 { border-radius: 12px; }
+  .shape-1 { border-radius: 4px; box-shadow: none; }
+  .shape-2 { border-radius: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.1) inset; }
+
+  .task-title { font-weight: bold; font-size: 1.1rem; margin-bottom: 0.4rem; }
+
+  .menu-btn {
+    position: absolute; top: 8px; right: 8px;
+    background: transparent; border: none; font-size: 1.5rem; cursor: pointer;
+  }
+
+  .menu {
+    position: absolute; top: 30px; right: 8px;
+    background: #fff; border: 1px solid #ccc; border-radius: 6px;
+    padding: 6px 8px; display: none; z-index: 10; min-width: 150px;
+    box-shadow: 0 2px 7px rgba(0,0,0,0.15);
+  }
+  .menu.visible { display: block; }
+  .menu button { width: 100%; border:none; background: none; padding: 6px 4px; text-align: left; cursor: pointer; }
+  .menu button:hover { background: #f0f0f0; }
+  .menu .delete-btn { color: #e53935; font-weight: bold; }
+
+  #calendar { max-width: 900px; margin: auto; }
+  table.calendar-table { border-collapse: collapse; width: 100%; }
+  table.calendar-table th, table.calendar-table td {
+    border: 1px solid #ccc; width: 14.28%; vertical-align: top;
+    height: 90px; padding: 3px 5px; position: relative;
+  }
+  table.calendar-table th { background:#0052cc; color:#fff; }
+  .calendar-date { font-weight: bold; font-size: 0.9rem; }
+  .calendar-task {
+    background:#e0e7ff; border-radius: 6px; margin: 2px 0;
+    padding: 2px 5px; font-size: 0.75rem; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+</style>
+</head>
+<body>
+<header>付箋付きタスク管理アプリ</header>
+<main>
+  <div class="tabs">
+    <button class="tab-btn active" data-view="list">リスト表示</button>
+    <button class="tab-btn" data-view="calendar">カレンダー表示</button>
+  </div>
+
+  <section id="listView">
+    <button id="addTaskBtn">＋ タスク追加</button>
+    <div id="taskList"></div>
+  </section>
+
+  <section id="calendarView" style="display:none;">
+    <div id="calendar"></div>
+  </section>
+</main>
+
+<!-- タスク追加モーダル -->
+<div id="taskModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; 
+  background: rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index: 100;">
+  <div style="background:#fff; padding:1rem; border-radius:8px; max-width:350px; width:90%;">
+    <h3>タスク追加・編集</h3>
+    <form id="taskForm">
+      <label>タイトル<br /><input type="text" id="taskTitle" required /></label><br />
+      <label>期限<br /><input type="date" id="taskDue" /></label><br />
+      <button type="submit">保存</button>
+      <button type="button" id="cancelBtn" style="margin-left:1rem;">キャンセル</button>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  let tasks = JSON.parse(localStorage.getItem("tasks")||"[]");
+  let editingTaskIndex = null;
+
+  const tabs = document.querySelectorAll(".tab-btn");
+  const listView = document.getElementById("listView");
+  const calendarView = document.getElementById("calendarView");
+  const taskList = document.getElementById("taskList");
+  const calendarDiv = document.getElementById("calendar");
+  const addTaskBtn = document.getElementById("addTaskBtn");
+  const taskModal = document.getElementById("taskModal");
+  const taskForm = document.getElementById("taskForm");
+  const taskTitleInput = document.getElementById("taskTitle");
+  const taskDueInput = document.getElementById("taskDue");
+  const cancelBtn = document.getElementById("cancelBtn");
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(b => b.classList.remove("active"));
+      tab.classList.add("active");
+      if(tab.dataset.view === "list") {
+        listView.style.display = "";
+        calendarView.style.display = "none";
+        renderTasks();
+      } else {
+        listView.style.display = "none";
+        calendarView.style.display = "";
+        renderCalendar();
+      }
+    });
+  });
+
+  const colors = ["color-0","color-1","color-2","color-3"];
+  const shapes = ["shape-0","shape-1","shape-2"];
+  const fontSizes = ["1rem","1.2rem","1.5rem"];
+
+  function saveTasks() {
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+  }
+
+  function renderTasks() {
+    taskList.innerHTML = "";
+    tasks.forEach((task,i) => {
+      const card = document.createElement("div");
+      card.className = `task-card ${colors[task.color]||colors[0]} ${shapes[task.shape]||shapes[0]}`;
+      if(task.done) card.classList.add("done");
+      card.style.fontSize = fontSizes[task.fontSize]||fontSizes[0];
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = task.done;
+      checkbox.addEventListener("change", () => {
+        tasks[i].done = checkbox.checked; saveTasks(); renderTasks();
+      });
+      card.appendChild(checkbox);
+
+      const title = document.createElement("div");
+      title.className = "task-title";
+      title.textContent = task.title;
+      card.appendChild(title);
+
+      const menuBtn = document.createElement("button");
+      menuBtn.className = "menu-btn";
+      menuBtn.textContent = "⋮";
+      card.appendChild(menuBtn);
+
+      const menu = document.createElement("div");
+      menu.className = "menu";
+      menu.innerHTML = `
+        <button class="font-small">文字サイズ 小</button>
+        <button class="font-medium">文字サイズ 中</button>
+        <button class="font-large">文字サイズ 大</button>
+        <button class="shape-0">形状 角丸</button>
+        <button class="shape-1">形状 角あり</button>
+        <button class="shape-2">形状 影あり</button>
+        <button class="delete-btn">🗑️ 削除</button>
+      `;
+      card.appendChild(menu);
+
+      menuBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        document.querySelectorAll(".menu").forEach(m => { if(m!==menu) m.classList.remove("visible"); });
+        menu.classList.toggle("visible");
+      });
+
+      menu.querySelector(".font-small").addEventListener("click", () => { tasks[i].fontSize = 0; saveTasks(); renderTasks(); });
+      menu.querySelector(".font-medium").addEventListener("click", () => { tasks[i].fontSize = 1; saveTasks(); renderTasks(); });
+      menu.querySelector(".font-large").addEventListener("click", () => { tasks[i].fontSize = 2; saveTasks(); renderTasks(); });
+      menu.querySelector(".shape-0").addEventListener("click", () => { tasks[i].shape = 0; saveTasks(); renderTasks(); });
+      menu.querySelector(".shape-1").addEventListener("click", () => { tasks[i].shape = 1; saveTasks(); renderTasks(); });
+      menu.querySelector(".shape-2").addEventListener("click", () => { tasks[i].shape = 2; saveTasks(); renderTasks(); });
+      menu.querySelector(".delete-btn").addEventListener("click", () => { tasks.splice(i,1); saveTasks(); renderTasks(); });
+
+      let startX = null;
+      card.addEventListener("touchstart", e => { startX = e.changedTouches[0].clientX; });
+      card.addEventListener("touchend", e => {
+        if(startX === null) return;
+        let endX = e.changedTouches[0].clientX;
+        let diff = endX - startX;
+        if(Math.abs(diff) > 30){
+          let currentColor = task.color || 0;
+          tasks[i].color = diff > 0
+            ? (currentColor + 1) % colors.length
+            : (currentColor + colors.length - 1) % colors.length;
+          saveTasks(); renderTasks();
+        }
+        startX = null;
+      });
+
+      taskList.appendChild(card);
+    });
+    document.body.addEventListener("click", () => {
+      document.querySelectorAll(".menu").forEach(m => m.classList.remove("visible"));
+    });
+  }
+
+  // --- カレンダー描画 ---
+  function renderCalendar() {
+    calendarDiv.innerHTML = "";
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    const title = document.createElement("h2");
+    title.textContent = `${year}年 ${month + 1}月`;
+    title.style.textAlign = "center";
+    title.style.marginBottom = "10px";
+    calendarDiv.appendChild(title);
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startWeekDay = firstDay.getDay();
+    const totalDays = lastDay.getDate();
+
+    const table = document.createElement("table");
+    table.className = "calendar-table";
+    const thead = document.createElement("thead");
+    const trHead = document.createElement("tr");
+    ["日","月","火","水","木","金","土"].forEach(d => {
+      const th = document.createElement("th");
+      th.textContent = d;
+      trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+    table.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    let dayCount = 1;
+    for(let i=0; i<6; i++){
+      const tr = document.createElement("tr");
+      for(let j=0; j<7; j++){
+        const td = document.createElement("td");
+        if(i===0 && j < startWeekDay){
+          td.textContent = "";
+        } else if(dayCount > totalDays){
+          td.textContent = "";
+        } else {
+          const dateDiv = document.createElement("div");
+          dateDiv.className = "calendar-date";
+          dateDiv.textContent = dayCount;
+          td.appendChild(dateDiv);
+
+          const dayStr = `${year}-${String(month+1).padStart(2,"0")}-${String(dayCount).padStart(2,"0")}`;
+          tasks.forEach(task => {
+            if (task.due === dayStr) {
+              const taskDiv = document.createElement("div");
+              taskDiv.className = "calendar-task";
+              taskDiv.textContent = task.title;
+              td.appendChild(taskDiv);
+            }
+          });
+          dayCount++;
+        }
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    calendarDiv.appendChild(table);
+  }
+
+  addTaskBtn.addEventListener("click", () => {
+    editingTaskIndex = null;
+    taskTitleInput.value = "";
+    taskDueInput.value = "";
+    taskModal.style.display = "flex";
+  });
+  cancelBtn.addEventListener("click", () => taskModal.style.display = "none");
+
+  taskForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const title = taskTitleInput.value.trim();
+    const due = taskDueInput.value;
+    if(!title) return;
+    if(editingTaskIndex === null) {
+      tasks.push({ title, due, done:false, color:0, shape:0, fontSize:0 });
+    } else {
+      tasks[editingTaskIndex].title = title;
+      tasks[editingTaskIndex].due = due;
+    }
+    saveTasks();
+    taskModal.style.display = "none";
+    renderTasks();
+  });
+
+  renderTasks();
+})();
+</script>
+</body>
+</html>
