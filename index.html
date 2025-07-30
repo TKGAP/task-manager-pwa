@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0052cc">
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>付箋付きタスク管理アプリ（年移動付きカレンダー）</title>
@@ -247,6 +249,8 @@ nextMonthBtn.addEventListener("click", () => {
   addTaskBtn.disabled = true;
 })();
 </script>
-
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js');
+}
 </body>
 </html>
