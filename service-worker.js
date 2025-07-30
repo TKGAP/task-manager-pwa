@@ -1,14 +1,18 @@
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open('v7').then(cache => cache.addAll([
-      './index.html',
-      './manifest.json',
-      './icon.png'
-    ]))
+    caches.open('task-app-v1').then(cache => {
+      return cache.addAll([
+        './',
+        './index.html'
+      ]);
+    })
   );
 });
+
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(resp => resp || fetch(e.request))
+    caches.match(e.request).then(response => {
+      return response || fetch(e.request);
+    })
   );
 });
