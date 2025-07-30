@@ -242,15 +242,18 @@ nextMonthBtn.addEventListener("click", () => {
     calendarDiv.appendChild(table);
   }
 
-  // 初期表示
+// 初期表示
   renderTasks();
 
   // タスク追加はまだ未実装なのでボタンは無効化中
   addTaskBtn.disabled = true;
-})();
+
+  // ←この中に serviceWorker のコードを入れる！
   if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js');
-}
+    navigator.serviceWorker.register('service-worker.js');
+  }
+
+})();  <!-- ここで即時関数が終わる -->
 </script>
 
 </body>
