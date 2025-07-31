@@ -216,251 +216,10 @@
 
 <script>
 (() => {
-  // ======= データ =======
-  let tasks = JSON.parse(localStorage.getItem("tasks")||"[]");
-  let editingTaskIndex = null;
+  // ======= 初期描画 =======
+  renderTasks();
 
-  // ======= UI =======
-  const tabs = document.querySelectorAll(".tab-btn");
-  const listView = document.getElementById("listView");
-  const calendarView = document.getElementById("calendarView");
-  const taskList = document.getElementById("taskList");
-  const calendarDiv = document.getElementById("calendar");
-  const addTaskBtn = document.getElementById("addTaskBtn");
-  const taskModal = document.getElementById("taskModal");
-  const taskForm = document.getElementById("taskForm");
-  const taskTitleInput = document.getElementById("taskTitle");
-  const taskDueInput = document.getElementById("taskDue");
-  const cancelBtn = document.getElementById("cancelBtn");
-
-  // タブ切替
-  tabs.forEach(tab => {
-    tab.addEventListener("click", () => {
-      tabs.forEach(b => b.classList.remove("active"));
-      tab.classList.add("active");
-      if(tab.dataset.view === "list") {
-        listView.style.display = "";
-        calendarView.style.display = "none";
-        renderTasks();
-      } else {
-        listView.style.display = "none";
-        calendarView.style.display = "";
-        renderCalendar();
-      }
-    });
-  });
-
-  // 付箋色・形・文字サイズ定義
-  const colors = ["color-0","color-1","color-2","color-3"];
-  const shapes = ["shape-0","shape-1","shape-2"];
-  const fontSizes = ["1rem","1.2rem","1.5rem"];
-
-  // --- タスク描画 ---
-  function renderTasks() {
-    taskList.innerHTML = "";
-    tasks.forEach((task,i) => {
-      const card = document.createElement("div");
-      card.className = `task-card ${colors[task.color]||colors[0]} ${shapes[task.shape]||shapes[0]}`;
-      if(task.done) card.classList.add("done");
-      card.style.fontSize = fontSizes[task.fontSize]||fontSizes[0];
-      card.setAttribute("data-index", i);
-
-      // チェックボックス
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = task.done;
-      checkbox.addEventListener("change", () => {
-        tasks[i].done = checkbox.checked;
-        saveTasks();
-        renderTasks();
-      });
-      card.appendChild(checkbox);
-
-      // タイトル
-      const title = document.createElement("div");
-      title.className = "task-title";
-      title.textContent = task.title;
-      card.appendChild(title);
-
-      // メニュー ⋮ ボタン
-      const menuBtn = document.createElement("button");
-      menuBtn.className = "menu-btn";
-      menuBtn.textContent = "⋮";
-      card.appendChild(menuBtn);
-
-      // メニュー作成
-      const menu = document.createElement("div");
-      menu.className = "menu";
-      menu.innerHTML = `
-        <button class="font-small">文字サイズ 小</button>
-        <button class="font-medium">文字サイズ 中</button>
-        <button class="font-large">文字サイズ 大</button>
-        <button class="shape-0">形状 角丸</button>
-        <button class="shape-1">形状 角あり</button>
-        <button class="shape-2">形状 影あり</button>
-        <button class="delete-btn">🗑️ 削除</button>
-      `;
-      card.appendChild(menu);
-
-      // メニュー表示切替
-      menuBtn.addEventListener("click", e => {
-        e.stopPropagation();
-        document.querySelectorAll(".menu").forEach(m => {
-          if(m!==menu) m.classList.remove("visible");
-        });
-        menu.classList.toggle("visible");
-      });
-
-      // メニュー内ボタン処理
-      menu.querySelector(".font-small").addEventListener("click", () => {
-        tasks[i].fontSize = 0;
-        saveTasks();
-        renderTasks();
-      });
-      menu.querySelector(".font-medium").addEventListener("click", () => {
-        tasks[i].fontSize = 1;
-        saveTasks();
-        renderTasks();
-      });
-      menu.querySelector(".font-large").addEventListener("click", () => {
-        tasks[i].fontSize = 2;
-        saveTasks();
-        renderTasks();
-      });
-      menu.querySelector(".shape-0").addEventListener("click", () => {
-        tasks[i].shape = 0;
-        saveTasks();
-        renderTasks();
-      });
-      menu.querySelector(".shape-1").addEventListener("click", () => {
-        tasks[i].shape = 1;
-        saveTasks();
-        renderTasks();
-      });
-      menu.querySelector(".shape-2").addEventListener("click", () => {
-        tasks[i].shape = 2;
-        saveTasks();
-        renderTasks();
-      });
-      menu.querySelector(".delete-btn").addEventListener("click", () => {
-        tasks.splice(i,1);
-        saveTasks();
-        renderTasks();
-      });
-
-      // 色変更(スワイプ的に簡易で左右で色変える)
-      let startX = null;
-      card.addEventListener("touchstart", e => {
-        startX = e.changedTouches[0].clientX;
-      });
-      card.addEventListener("touchend", e => {
-        if(startX === null) return;
-        let endX = e.changedTouches[0].clientX;
-        let diff = endX - startX;
-        if(Math.abs(diff) > 30){
-          let currentColor = task.color || 0;
-          if(diff > 0) {
-            // 右スワイプで色1つ進む
-            tasks[i].color = (currentColor + 1) % colors.length;
-          } else {
-            // 左スワイプで色1つ戻る
-            tasks[i].color = (currentColor + colors.length - 1) % colors.length;
-          }
-          saveTasks();
-          renderTasks();
-        }
-        startX = null;
-      });
-
-      taskList.appendChild(card);
-    });
-    // メニュー閉じる
-    document.body.addEventListener("click", () => {
-      document.querySelectorAll(".menu").forEach(m => m.classList.remove("visible"));
-    });
-  }
-
-  // --- カレンダー描画 ---
-  function renderCalendar() {
-    calendarDiv.innerHTML = "";
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startWeekDay = firstDay.getDay();
-    const totalDays = lastDay.getDate();
-
-    const table = document.createElement("table");
-    table.className = "calendar-table";
-    const thead = document.createElement("thead");
-    const trHead = document.createElement("tr");
-    ["日","月","火","水","木","金","土"].forEach(d => {
-      const th = document.createElement("th");
-      th.textContent = d;
-      trHead.appendChild(th);
-    });
-    thead.appendChild(trHead);
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-    let dayCount = 1;
-    for(let i=0; i<6; i++){
-      const tr = document.createElement("tr");
-      for(let j=0; j<7; j++){
-        const td = document.createElement("td");
-        if(i===0 && j < startWeekDay){
-          td.textContent = "";
-        } else if(dayCount > totalDays){
-          td.textContent = "";
-        } else {
-          const dateDiv = document.createElement("div");
-          dateDiv.className = "calendar-date";
-          dateDiv.textContent = dayCount;
-          td.appendChild(dateDiv);
-
-          // その日付のタスクを表示
-          const dayStr = `${year}-${String(month+1).padStart(2,"0")}-${String(dayCount).padStart(2,"0")}`;
-          tasks.forEach(task => {
-            if(task.due === dayStr){
-              const taskDiv = document.createElement("div");
-              taskDiv.className = "calendar-task";
-              taskDiv.textContent = task.title;
-              td.appendChild(taskDiv);
-            }
-          });
-
-          dayCount++;
-        }
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
-    calendarDiv.appendChild(table);
-  }
-
-  // ======= 保存
-  // ======= 保存 =======
-  function saveTasks() {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }
-
-  // ======= モーダル表示 =======
-  function openModal(editIndex = null) {
-    editingTaskIndex = editIndex;
-    if(editIndex !== null){
-      const t = tasks[editIndex];
-      taskTitleInput.value = t.title || "";
-      taskDueInput.value = t.due || "";
-    } else {
-      taskTitleInput.value = "";
-      taskDueInput.value = "";
-    }
-    taskModal.style.display = "flex";
-  }
-
-  // ======= モーダル非表示 =======
+  // ======= モーダルを閉じる =======
   function closeModal() {
     taskModal.style.display = "none";
   }
@@ -475,23 +234,21 @@
     closeModal();
   });
 
-  // ======= フォーム送信（タスク保存） =======
+  // ======= タスク保存 =======
   taskForm.addEventListener("submit", e => {
     e.preventDefault();
     const title = taskTitleInput.value.trim();
     const due = taskDueInput.value;
 
-    if(!title){
+    if (!title) {
       alert("タイトルは必須です");
       return;
     }
 
-    if(editingTaskIndex !== null){
-      // 編集モード
+    if (editingTaskIndex !== null) {
       tasks[editingTaskIndex].title = title;
       tasks[editingTaskIndex].due = due;
     } else {
-      // 新規追加
       tasks.push({
         title,
         due,
@@ -501,23 +258,20 @@
         fontSize: 0,
       });
     }
+
     saveTasks();
     closeModal();
     renderTasks();
-    if(document.querySelector(".tab-btn.active").dataset.view === "calendar"){
+
+    if (document.querySelector(".tab-btn.active").dataset.view === "calendar") {
       renderCalendar();
     }
   });
 
-  // 初期表示
-  renderTasks();
-
-  // service worker登録（あれば）
+  // ======= Service Worker =======
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
   }
-})();
-</script>
 
-</body>
-</html>
+})(); // 即時実行
+</script>
