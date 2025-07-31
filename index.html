@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>付箋付きタスク管理アプリ</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0052cc">
+<style>
+  body {
+    font-family: sans-serif;
+    margin:0; padding:0;
+    background:#f0f4f8;
+  }
+  header {
+    background:#0052cc;
+    color:#fff;
+    padding:1rem;
+    text-align:center;
+    font-size:1.3rem;
+  }
+  main {
+    max-width: 900px;
+    margin: auto;
+    padding: 1rem;
+  }
+  /* タブ切替ボタン */
+  .tabs {
+    display:flex;
+    justify-content:center;
+    margin-bottom: 1rem;
+  }
+  .tab-btn {
+    padding: 0.5rem 1.5rem;
+    margin:0 0.3rem;
+    border:none;
+    background:#ccc;
+    border-radius:4px;
+    cursor:pointer;
+    font-weight:bold;
+  }
+  .tab-btn.active {
+    background:#0052cc;
+    color:#fff;
+  }
+
+  /* タスクリスト */
+  #taskList {
+    display:flex;
+    flex-wrap: wrap;
+    gap: 0.8rem;
+  }
+
+  /* 付箋タスクカード */
+  .task-card {
+    position: relative;
+    background:#fff;
+    box-shadow: 0 3px 7px rgba(0,0,0,0.15);
+    padding: 1rem 1rem 1rem 2.5rem;
+    border-radius: 12px;
+    width: 180px;
+    min-height: 100px;
+    user-select:none;
+    transition: background-color 0.3s, opacity 0.3s;
+    touch-action: pan-y;
+  }
+  /* チェック済みは薄く */
+  .task-card.done {
+    opacity: 0.5;
+    text-decoration: line-through;
+  }
+
+  /* チェックボックス */
+  .task-card input[type=checkbox] {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    width: 18px;
+    height: 18px;
+  }
+
+  /* 付箋の色バリエーション */
+  .color-0 { background:#fffbea; }
+  .color-1 { background:#ffebeb; }
+  .color-2 { background:#e0ffe0; }
+  .color-3 { background:#e0e7ff; }
+
+  /* 付箋形状パターン */
+  .shape-0 { border-radius: 12px; box-shadow: 0 3px 7px rgba(0,0,0,0.15); }
+  .shape-1 { border-radius: 4px; box-shadow: none; }
+  .shape-2 { border-radius: 20px; box-shadow: 0 0 15px rgba(0,0,0,0.1) inset; }
+
+  /* 付箋タイトル */
+  .task-title {
+    font-weight: bold;
+    font-size: 1.1rem;
+    margin-bottom: 0.4rem;
+  }
+  /* メニュー ⋮ ボタン */
+  .menu-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    user-select:none;
+  }
+
+  /* メニュー */
+  .menu {
+    position: absolute;
+    top: 30px;
+    right: 8px;
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 2px 7px rgba(0,0,0,0.15);
+    border-radius: 6px;
+    padding: 6px 8px;
+    display: none;
+    z-index: 10;
+    min-width: 150px;
+  }
+  .menu.visible {
+    display: block;
+  }
+  .menu button {
+    width: 100%;
+    border:none;
+    background: none;
+    padding: 6px 4px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .menu button:hover {
+    background: #f0f0f0;
+  }
+  .menu .delete-btn {
+    color: #e53935;
+    font-weight: bold;
+  }
+
+  /* カレンダーエリア */
+  #calendar {
+    max-width: 900px;
+    margin: auto;
+  }
+  table.calendar-table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+  table.calendar-table th, table.calendar-table td {
+    border: 1px solid #ccc;
+    width: 14.28%;
+    vertical-align: top;
+    height: 90px;
+    padding: 3px 5px;
+    position: relative;
+  }
+  table.calendar-table th {
+    background:#0052cc;
+    color:#fff;
+  }
+  .calendar-date {
+    font-weight: bold;
+    font-size: 0.9rem;
+    margin-bottom: 3px;
+  }
+  /* カレンダー内タスク表示 */
+  .calendar-task {
+    background:#e0e7ff;
+    border-radius: 6px;
+    margin: 2px 0;
+    padding: 2px 5px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style>
+</head>
+<body>
+<header>付箋付きタスク管理アプリ</header>
+<main>
+  <div class="tabs">
+    <button class="tab-btn active" data-view="list">リスト表示</button>
+    <button class="tab-btn" data-view="calendar">カレンダー表示</button>
+  </div>
+
+  <section id="listView">
+    <button id="addTaskBtn">＋ タスク追加</button>
+    <div id="taskList"></div>
+  </section>
+
+  <section id="calendarView" style="display:none;">
+    <div id="calendar"></div>
+  </section>
+</main>
+
+<!-- タスク追加モーダル -->
+<div id="taskModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; 
+  background: rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index: 100;">
+  <div style="background:#fff; padding:1rem; border-radius:8px; max-width:350px; width:90%;">
+    <h3>タスク追加・編集</h3>
+    <form id="taskForm">
+      <label>タイトル<br /><input type="text" id="taskTitle" required /></label><br />
+      <label>期限<br /><input type="date" id="taskDue" /></label><br />
+      <button type="submit">保存</button>
+      <button type="button" id="cancelBtn" style="margin-left:1rem;">キャンセル</button>
+    </form>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ======= データ =======
+  let tasks = JSON.parse(localStorage.getItem("tasks")||"[]");
+  let editingTaskIndex = null;
+
+  // ======= UI要素 =======
+  const tabs = document.querySelectorAll(".tab-btn");
+  const listView = document.getElementById("listView");
+  const calendarView = document.getElem
+  function openModal(editIndex = null) {
+    editingTaskIndex = editIndex;
+    if(editIndex !== null) {
+      taskTitleInput.value = tasks[editIndex].title;
+      taskDueInput.value = tasks[editIndex].due || "";
+    } else {
+      taskTitleInput.value = "";
+      taskDueInput.value = "";
+    }
+    taskModal.style.display = "flex";
+  }
+
+  // モーダル閉じる
+  function closeModal() {
+    taskModal.style.display = "none";
+  }
+
+  // 初期描画
+  renderTasks();
+
+  // ボタンイベント
+  addTaskBtn.addEventListener("click", () => openModal());
+
+  cancelBtn.addEventListener("click", () => closeModal());
+
+  // フォーム送信（保存）
+  taskForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const title = taskTitleInput.value.trim();
+    const due = taskDueInput.value;
+
+    if(!title){
+      alert("タイトルは必須です");
+      return;
+    }
+
+    if(editingTaskIndex !== null){
+      tasks[editingTaskIndex].title = title;
+      tasks[editingTaskIndex].due = due;
+    } else {
+      tasks.push({
+        title,
+        due,
+        done: false,
+        color: 0,
+        shape: 0,
+        fontSize: 0,
+      });
+    }
+
+    saveTasks();
+    closeModal();
+
+    if(document.querySelector(".tab-btn.active").dataset.view === "list"){
+      renderTasks();
+    } else {
+      renderCalendar();
+    }
+  });
+
+  // Service Worker登録（あれば）
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  }
+
+  // メニュー外クリックで閉じる
+  document.body.addEventListener("click", () => {
+    document.querySelectorAll(".menu").forEach(m => m.classList.remove("visible"));
+  });
+
+})();
+</script>
+
+</body>
+</html>
