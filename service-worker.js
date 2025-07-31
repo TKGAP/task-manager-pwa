@@ -1,6 +1,6 @@
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open('task-app-v2').then(cache => {
+    caches.open('task-app-v3').then(cache => {
       return cache.addAll([
         './',
         './index.html'
