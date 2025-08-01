@@ -283,11 +283,6 @@
     }
   });
 
-  // Service Worker登録（あれば）
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js').catch(() => {});
-  }
-
   // メニュー外クリックで閉じる
   document.body.addEventListener("click", () => {
     document.querySelectorAll(".menu").forEach(m => m.classList.remove("visible"));
