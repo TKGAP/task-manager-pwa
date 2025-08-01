@@ -227,6 +227,7 @@
     editingTaskIndex = editIndex;
     if(editIndex !== null) {
       taskTitleInput.value = tasks[editIndex].title;
+
       taskDueInput.value = tasks[editIndex].due || "";
     } else {
       taskTitleInput.value = "";
@@ -234,7 +235,17 @@
     }
     taskModal.style.display = "flex";
   }
-
+function openModal(index = null) {
+  editingTaskIndex = index;
+  if (index !== null) {
+    taskTitleInput.value = tasks[index].title;
+    taskDueInput.value = tasks[index].due || "";
+  } else {
+    taskTitleInput.value = "";
+    taskDueInput.value = "";
+  }
+  taskModal.style.display = "flex"; // モーダルを表示
+}
   // モーダル閉じる
   function closeModal() {
     taskModal.style.display = "none";
